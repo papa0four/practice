@@ -14,6 +14,7 @@
 
 /* global variables */
 bool serv_running = true;
+bool exiting = false;
 size_t clients_con = 0;
 threadpool* pool = NULL;
 queue* fd_queue = NULL;
@@ -32,6 +33,13 @@ void handle_signal(int sig_no)
 
 void list_dir(int sockfd)
 {
+    /**
+     * fix this function
+     * need to be able to send one complete message
+     * it should contain a comma separated list of all the files
+     * that way the client can be edited to split the binary
+     * string on the comma instead of adding a newline
+     */
     ssize_t bytes_sent = 0;
     DIR* d = NULL;
     char* file = calloc(MAX_STR_LEN, sizeof(char));
@@ -49,24 +57,27 @@ void list_dir(int sockfd)
             if (DT_REG == dir->d_type)
             {
                 dir->d_name[strlen(dir->d_name)] = '\n';
-                bytes_sent = send(sockfd, dir->d_name, strlen(dir->d_name), 0);
+                dir->d_name[strlen(dir->d_name)] = '\0';
+                file = dir->d_name;
+                printf("FILE: %s", file);
+                bytes_sent = send(sockfd, file, strnlen(file, MAX_STR_LEN), 0);
+                printf("BYTES_SENT: %zu\n", bytes_sent);
                 if (0 > bytes_sent)
                 {
                     printf("Error sending directory list\n");
                     break;
                 }
             }
+            file = NULL;
         }
     }
     closedir(d);
-    free(file);
-    file = NULL;
 }
 
 bool is_file(char* file_name)
 {
     char file_path[] = "FileServer/";
-    char* full_path = calloc(1, strlen(file_path) + strlen(file_name));
+    char* full_path = calloc((strlen(file_path) + strlen(file_name)), sizeof(char));
     if (NULL == full_path)
     {
         errno = ENOMEM;
@@ -95,7 +106,7 @@ void download_file(char* file_passed, int sockfd)
     char file_path[] = "FileServer/";
     signed int err_code = -1;
     char* buffer = NULL;
-    char* full_path = calloc(1, strlen(file_path) + strlen(file_passed));
+    char* full_path = calloc((strlen(file_path) + strlen(file_passed)), sizeof(char));
     if (NULL == full_path)
     {
         errno = ENOMEM;
@@ -124,7 +135,7 @@ void download_file(char* file_passed, int sockfd)
             full_path = NULL;
             return;
         }
-        buffer = calloc((file_sz + 1), sizeof(char));
+        buffer = calloc(file_sz, sizeof(char));
         if (NULL == buffer)
         {
             errno = ENOMEM;
@@ -236,7 +247,6 @@ void upload_file(char* file_passed, int file_size, int sockfd)
 
 void end_connection()
 {
-    printf("Client has ended the connection...\n");
     pthread_mutex_lock(&pool->lock);
     pool->thread_cnt--;
     pthread_mutex_unlock(&pool->lock);
@@ -257,9 +267,7 @@ void* server_func()
     ssize_t file_recv = 0;
     int upload_file_sz = 0;
     int fd = 0;
-    /**
-     * create variables for expected commands received from client
-     */
+    
     while (serv_running)
     {
         pthread_mutex_lock(&pool->lock);
@@ -365,28 +373,26 @@ void* server_func()
                     if (EXIT == command)
                     {
                         msg_recv = recv(fd, client_msg, sizeof(client_msg), 0);
-                        printf("BFORE CHECK - CLIENT_MSG: %s\n", client_msg);
                         if (0 == (strncmp(client_msg, "exit", strlen(client_msg))))
                         {
-                            printf("CLIENT_MSG: %s\n", client_msg);
-                            end_connection();
+                            exiting = true;
+                            command = -1;
                         }
+                        printf("Client has ended the connection...\n");
                     }
                     break;
 
                 default:
                     printf("Invalid command received from the client\n");
-                    if (0 > msg_recv)
-                    {
-                        end_connection();
-                    }
-                    serv_running = false;
                     break;
             }
             memset(client_msg, 0, sizeof(client_msg));
-            command = 0; 
+            if (command == -1)
+            {
+                break;
+            }
         }
-		if (0 >= bytes_recv)
+		if (0 >= bytes_recv || 0 >= msg_recv || true == exiting)
 		{
 			end_connection();
 		}
@@ -576,11 +582,10 @@ int main (int argc, char** argv)
         printf("Number of current connections to server: %ld\n", clients_con);
         int connfd = accept(sockfd, (struct sockaddr *)&cli_addr, &cli_addr_len);
         clients_con++;
-        if (1 > connfd)
+        if (0 > connfd)
         {
-            errno = EBADF;
-            perror("Could not accept incoming client connection");
-            exit(-1);
+            printf("Cleaning up resources\n");
+            goto END;
         }
         handle_incoming_client(connfd);
         if (false == serv_running)
@@ -589,6 +594,7 @@ int main (int argc, char** argv)
             break;
         }
     }
-    close(sockfd);
-    return EXIT_SUCCESS;
+    END:
+        close(sockfd);
+        return EXIT_SUCCESS;
 }
