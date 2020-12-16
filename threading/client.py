@@ -180,7 +180,7 @@ def download_existing_file(menu_option):
         sent = cli_socket.send(d_load)
         if sent == 0:
             raise RuntimeError("Socket connection broken: send download command")
-        choice = input("Type the name of the file you wish to download:\n")
+        choice = input("Type the name of the file you wish to download: ")
         choice = choice.rstrip()
         totalsent = 0
         while totalsent < len(choice):
@@ -258,7 +258,17 @@ server, populate the global list and print to client for further
 use during the communication
 '''
 def recv_file_list():
-    data = cli_socket.recv(1024)
+    data = b''
+    try:
+        chunk = cli_socket.recv(1024)
+        if not chunk:
+            raise RuntimeError("Socket connection broken: receive dir list")
+        data += chunk
+        print(data)
+    except socket.error:
+        print("Could not receive directory list")
+    # data = cli_socket.recv(1024)
+    # print(data)
     list_dir = data.decode('utf-8').split('\n')
     while '' in list_dir:
         list_dir.remove('')
@@ -285,9 +295,9 @@ def get_file_list(menu_option):
                 raise RuntimeError("Socket connection broken: sending list command")
             totalsent += sent
         recv_file_list()
-        file_list.clear()
     else:
         raise RuntimeError("Invalid menu option received: get file")
+    file_list.clear()
 
     
 if __name__ == "__main__":
