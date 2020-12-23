@@ -4,7 +4,6 @@
 #include "server.h"
 
 #define SERV_ADDR "127.0.0.1"
-#define MAX_DIR_SZ 65535
 #define MAX_STR_LEN 255
 #define MAX_CLIENTS 50
 #define LIST 100
@@ -31,6 +30,36 @@ void handle_signal(int sig_no)
     }
 }
 
+int get_file_count(int sockfd)
+{
+    if (0 > sockfd)
+    {
+        return 0;
+    }
+    ssize_t bytes_sent = 0;
+    int file_count = 0;
+    DIR* d = NULL;
+    d = opendir("FileServer/");
+    if (d)
+    {
+        while (NULL != (dir = readdir(d)))
+        {
+            if (DT_REG == dir->d_type)
+            {
+                file_count++;
+            }
+        }
+    }
+    closedir(d);
+    bytes_sent = send(sockfd, &file_count, sizeof(int), 0);
+    if (0 > bytes_sent)
+    {
+        printf("Error sending file count\n");
+        return -1;
+    }
+    return file_count;
+}
+
 void list_dir(int sockfd)
 {
     /**
@@ -41,34 +70,52 @@ void list_dir(int sockfd)
      * string on the comma instead of adding a newline
      */
     ssize_t bytes_sent = 0;
+    ssize_t name_sent = 0;
     DIR* d = NULL;
-    char* file = calloc(MAX_STR_LEN, sizeof(char));
-    if (NULL == file)
+    int num_files = get_file_count(sockfd);
+    size_t name_len = 0;
+    char** file_list = calloc(1, num_files);
+    if (NULL == file_list)
     {
         errno = ENOMEM;
-        perror("Could not allocate memory for file");
-        exit(-1);
+        perror("Could not allocate memory for file_list");
+        exit(EXIT_FAILURE);
     }
-    d = opendir("FileServer/");
-    if (d)
+    if ((d = opendir("FileServer/")) == NULL)
     {
-        while (NULL != (dir = readdir(d)))
+        return;
+    }
+    size_t i = 0;
+    while (NULL != (dir = readdir(d)))
+    {
+        if (DT_REG == dir->d_type)
         {
-            if (DT_REG == dir->d_type)
+            file_list[i] = calloc(1, (sizeof(char) * MAX_STR_LEN));
+            if (NULL == file_list[i])
             {
-                dir->d_name[strlen(dir->d_name)] = '\n';
-                dir->d_name[strlen(dir->d_name)] = '\0';
-                file = dir->d_name;
-                printf("FILE: %s", file);
-                bytes_sent = send(sockfd, file, strnlen(file, MAX_STR_LEN), 0);
-                printf("BYTES_SENT: %zu\n", bytes_sent);
-                if (0 > bytes_sent)
-                {
-                    printf("Error sending directory list\n");
-                    break;
-                }
+                errno = ENOMEM;
+                perror("Could not allocate memory for file");
+                exit(EXIT_FAILURE);
             }
-            file = NULL;
+            memcpy(file_list[i], dir->d_name, strlen(dir->d_name));
+            name_len = strnlen(file_list[i], MAX_STR_LEN);
+            bytes_sent = send(sockfd, &name_len, sizeof(size_t), 0);
+            if (0 > bytes_sent)
+            {
+                printf("Error sending file name length\n");
+                return;
+            }
+            name_sent = send(sockfd, file_list[i], strnlen(file_list[i], MAX_STR_LEN), 0);
+            if (0 > name_sent)
+            {
+                printf("Error sending directory list\n");
+                return;
+            }
+            i++;
+        }
+        else
+        {
+            continue;
         }
     }
     closedir(d);
@@ -593,8 +640,14 @@ int main (int argc, char** argv)
             pool_cleanup();
             break;
         }
+        if (clients_con > num_of_clients)
+        {
+            clients_con--;
+            close(sockfd);
+        }
     }
     END:
         close(sockfd);
+        pool_cleanup();
         return EXIT_SUCCESS;
 }

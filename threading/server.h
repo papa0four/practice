@@ -29,6 +29,7 @@ typedef struct _thread_pool {
 }threadpool;
 
 void handle_signal(int sig_no);
+int get_file_count(int sockfd);
 void list_dir(int sockfd);
 bool is_file(char* file_name);
 void download_file(char* file_passed, int sockfd);

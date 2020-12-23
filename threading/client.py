@@ -31,6 +31,16 @@ catch SIGINT signal to exit server gracefully if user does not
 enter proper exit menu option
 '''
 def signal_handler(sig, frame):
+    command = 500
+    exit = struct.pack("I", command)
+    sent = cli_socket.send(exit)
+    goodbye = "exit"
+    totalsent = 0
+    while totalsent < len(goodbye):
+        sent = cli_socket.send(goodbye[totalsent:].encode('utf-8'))
+        if sent == 0:
+            raise RuntimeError("Socket connection broken: sending exit")
+        totalsent += sent
     print("\nCtrl+C caught and handled... Goodbye!")
     cli_socket.close()
     sys.exit(0)
@@ -253,28 +263,26 @@ def upload_file(menu_option):
         raise RuntimeError("Invalid menu option received: upload file")
 
 '''
-receive directory listing of existing files on the file
-server, populate the global list and print to client for further
-use during the communication
+get the length of the file name
+used as a helper method for the get file lis
+this will allow the directory list call to always grab the
+file listing on the server
 '''
 def recv_file_list():
+    file_count = cli_socket.recv(4)
+    file_count = int.from_bytes(file_count, "little", signed=True)
+    received = 0
+    total_recv = 0
     data = b''
-    try:
-        chunk = cli_socket.recv(1024)
-        if not chunk:
-            raise RuntimeError("Socket connection broken: receive dir list")
-        data += chunk
-        print(data)
-    except socket.error:
-        print("Could not receive directory list")
-    # data = cli_socket.recv(1024)
-    # print(data)
-    list_dir = data.decode('utf-8').split('\n')
-    while '' in list_dir:
-        list_dir.remove('')
-    for item in list_dir:
-        file_list.append(item)
-    print("Received from server: {}".format(file_list))
+    #add second recv call to get file name and append to list
+    while received < file_count:
+        file_len = cli_socket.recv(8)
+        file_len = int.from_bytes(file_len, "little", signed=True)
+        data = cli_socket.recv(file_len)
+        file_list.append(data.decode('utf-8'))
+        received += 1
+        total_recv += file_len
+    print(file_list)
 
 '''
 takes the user's input from the main menu,
@@ -306,12 +314,10 @@ if __name__ == "__main__":
         user_in = main_menu()
         if user_in == 1:
             download_existing_file(user_in)
-            file_list.clear()
         elif user_in == 2:
             upload_file(user_in)
         elif user_in == 3:
             get_file_list(user_in)
-            file_list.clear()
         elif user_in == 4:
             help_option(user_in)
         elif user_in == 5:
