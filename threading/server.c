@@ -18,39 +18,66 @@ size_t clients_con = 0;
 threadpool* pool = NULL;
 queue* fd_queue = NULL;
 
+/**
+ * catch ctrl+c call while the server is running
+ * while there are clients connected, the server cannot be killed
+ * if no clients are connected, the server can be killed
+ */
 void handle_signal(int sig_no)
 {
     if (SIGINT == sig_no)
     {
+        // goodbye message
         printf("\nGoodbye...\n");
+        // lock shared resources
         pthread_mutex_lock(&pool->lock);
+        // switch global server running variable
         serv_running = false;
+        // unlock shared resources
         pthread_mutex_unlock(&pool->lock);
+        // call resource cleanup function
         pool_cleanup();
     }
-}
+} // end handle signal
 
+/**
+ * helper function to get the amount of files
+ * contained within the File Server
+ * sends valid files to client and returns number of files
+ */
 int get_file_count(int sockfd)
 {
+    // check if file descriptor is valid
     if (0 > sockfd)
     {
         return 0;
     }
+    // local variables
     ssize_t bytes_sent = 0;
     int file_count = 0;
     DIR* d = NULL;
+    // call open dir on File directory
     d = opendir("FileServer/");
     if (d)
     {
+        // loop through directory
         while (NULL != (dir = readdir(d)))
         {
+            // check for regular file type
             if (DT_REG == dir->d_type)
             {
+                // increment number of regular files
                 file_count++;
+            }
+            else
+            {
+                // if not regular file, continue loop
+                continue;
             }
         }
     }
     closedir(d);
+    // send number of refular files to client
     bytes_sent = send(sockfd, &file_count, sizeof(int), 0);
     if (0 > bytes_sent)
     {
@@ -58,22 +85,22 @@ int get_file_count(int sockfd)
         return -1;
     }
     return file_count;
-}
+} // end get file count
 
+/**
+ * get directory listing of regular files
+ * send directory list to client
+ * this allows the client to see what is contained in the server
+ */
 void list_dir(int sockfd)
 {
-    /**
-     * fix this function
-     * need to be able to send one complete message
-     * it should contain a comma separated list of all the files
-     * that way the client can be edited to split the binary
-     * string on the comma instead of adding a newline
-     */
+    // local variables
     ssize_t bytes_sent = 0;
     ssize_t name_sent = 0;
     DIR* d = NULL;
     int num_files = get_file_count(sockfd);
     size_t name_len = 0;
+    // allocate memory for file list
     char** file_list = calloc(1, num_files);
     if (NULL == file_list)
     {
@@ -81,15 +108,20 @@ void list_dir(int sockfd)
         perror("Could not allocate memory for file_list");
         exit(EXIT_FAILURE);
     }
+    // open directory and check for error
     if ((d = opendir("FileServer/")) == NULL)
     {
         return;
     }
+    // iterator variable for 2D array index
     size_t i = 0;
+    // loop over directory
     while (NULL != (dir = readdir(d)))
     {
+        // if file type is "regular"
         if (DT_REG == dir->d_type)
         {
+            // allocate each array index for file names within directory
             file_list[i] = calloc(1, (sizeof(char) * MAX_STR_LEN));
             if (NULL == file_list[i])
             {
@@ -97,14 +129,18 @@ void list_dir(int sockfd)
                 perror("Could not allocate memory for file");
                 exit(EXIT_FAILURE);
             }
+            // copy file name from readdir to 2D file list
             memcpy(file_list[i], dir->d_name, strlen(dir->d_name));
+            // get the length of each file name
             name_len = strnlen(file_list[i], MAX_STR_LEN);
+            // send name length to the client
             bytes_sent = send(sockfd, &name_len, sizeof(size_t), 0);
             if (0 > bytes_sent)
             {
                 printf("Error sending file name length\n");
                 return;
             }
+            // send the file names to the client
             name_sent = send(sockfd, file_list[i], strnlen(file_list[i], MAX_STR_LEN), 0);
             if (0 > name_sent)
             {
@@ -115,15 +151,32 @@ void list_dir(int sockfd)
         }
         else
         {
+            // if not regular file type, continue loop
             continue;
         }
     }
     closedir(d);
-}
+    // clean up allocated memory for 2D array
+    for (int i = 0; i < num_files; i++)
+    {
+        free(file_list[i]);
+        file_list[i] = NULL;
+    }
+    free(file_list);
+    file_list = NULL;
+} // end list dir
 
+/**
+ * check if file received from client exists on the server
+ * bool function that performs a validity check
+ * taking file name received from the client and
+ * determines if it exists within the FileServer directory
+ */
 bool is_file(char* file_name)
 {
+    // FileServer directory
     char file_path[] = "FileServer/";
+    // allocate memory to create absolute file path
     char* full_path = calloc((strlen(file_path) + strlen(file_name)), sizeof(char));
     if (NULL == full_path)
     {
@@ -131,28 +184,37 @@ bool is_file(char* file_name)
         perror("Could not allocate memory for full path");
         exit(-1);
     }
+    // copy direcotry into full path array
     strncpy(full_path, file_path, strlen(file_path));
+    // append file passed from client into absolute path
     strncat(full_path, file_name,strlen(file_name));
+    // call access function to determine file existence
     if (access(full_path, F_OK) == 0)
     {
         free(full_path);
         full_path = NULL;
         return true;
     }
-    else
-    {
-        free(full_path);
-        full_path = NULL;
-        return false;
-    }
-}
+    // if false free resources and return false
+    free(full_path);
+    full_path = NULL;
+    return false;
+} // end is file
 
+/**
+ * receive a file from client to download from server to client
+ * calls the validity check before allowing client to download
+ * reads the file contents and sends to client in chunks
+ * before rewinding the file pointer
+ */
 void download_file(char* file_passed, int sockfd)
 {
+    // local variables
     FILE* fp = NULL;
     char file_path[] = "FileServer/";
     signed int err_code = -1;
     char* buffer = NULL;
+    // allocate memory for absolute path
     char* full_path = calloc((strlen(file_path) + strlen(file_passed)), sizeof(char));
     if (NULL == full_path)
     {
@@ -160,8 +222,11 @@ void download_file(char* file_passed, int sockfd)
         perror("Could not allocate memory for full path");
         return;
     }
+    // copy directory into absolute path array
     strncpy(full_path, file_path, strlen(file_path));
+    // append the file received from client to absolute path
     strncat(full_path, file_passed,strlen(file_passed));
+    // open the file to read in binary mode
     fp = fopen(full_path, "rb");
     if (NULL == fp)
     {
@@ -172,8 +237,10 @@ void download_file(char* file_passed, int sockfd)
         full_path = NULL;
         return;
     }
+    // seek file pointer to end to obtain file size
     if (fseek(fp, 0L, SEEK_END) == 0)
     {
+        // set variable to file size
         long file_sz = ftell(fp);
         if (-1 == file_sz)
         {
@@ -182,6 +249,7 @@ void download_file(char* file_passed, int sockfd)
             full_path = NULL;
             return;
         }
+        // allocate memory to store file contents into array
         buffer = calloc(file_sz, sizeof(char));
         if (NULL == buffer)
         {
@@ -191,6 +259,7 @@ void download_file(char* file_passed, int sockfd)
             full_path = NULL;
             return;
         }
+        // rewind file pointer to beginning of file
         if (fseek(fp, 0L, SEEK_SET) != 0)
         {
             perror("Could not rewind file");
@@ -200,10 +269,14 @@ void download_file(char* file_passed, int sockfd)
             buffer = NULL;
             return;
         }
+        // set a changeable variable to overall file size
         long bytes_left = file_sz;
+        // variable used to read file in chunks
         size_t length = 0;
+        // send file size to client
         send(sockfd, &file_sz, sizeof(long), 0);
-        printf("Sending file of size %ld to client...\n", file_sz);        
+        printf("Sending file of size %ld to client...\n", file_sz);
+        // create a loop to send file contents to client in chunks       
         while (bytes_left > 0)
         {
             length = fread(buffer, sizeof(char), 1024, fp);
@@ -216,16 +289,19 @@ void download_file(char* file_passed, int sockfd)
                 buffer = NULL;
                 return;
             }
+            // send content chunks to client
             send(sockfd, buffer, length, 0);
+            // decrease changeable variable to ensure all bytes are sent
             bytes_left -= 1024;
         }      
     }
+    // close file pointer and free allocated memory
     fclose(fp);
     free(full_path);
     full_path = NULL;
     free(buffer);
     buffer = NULL;
-}
+} // end download file
 
 void upload_file(char* file_passed, int file_size, int sockfd)
 {
