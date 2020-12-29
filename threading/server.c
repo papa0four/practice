@@ -101,22 +101,24 @@ void list_dir(int sockfd)
     int num_files = get_file_count(sockfd);
     size_t name_len = 0;
     // allocate memory for file list
-    char** file_list = calloc(1, num_files);
+    char** file_list = NULL;
+    file_list = calloc(num_files, sizeof(char*));
     if (NULL == file_list)
     {
         errno = ENOMEM;
         perror("Could not allocate memory for file_list");
         exit(EXIT_FAILURE);
     }
+    printf("SIZEOF FILE_LIST: %ld\n", sizeof(file_list));
     // open directory and check for error
     if ((d = opendir("FileServer/")) == NULL)
     {
         return;
     }
     // iterator variable for 2D array index
-    size_t i = 0;
+    int i = 0;
     // loop over directory
-    while (NULL != (dir = readdir(d)))
+    while (NULL != (dir = readdir(d)) && num_files >= i)
     {
         // if file type is "regular"
         if (DT_REG == dir->d_type)
@@ -129,6 +131,7 @@ void list_dir(int sockfd)
                 perror("Could not allocate memory for file");
                 exit(EXIT_FAILURE);
             }
+
             // copy file name from readdir to 2D file list
             memcpy(file_list[i], dir->d_name, strlen(dir->d_name));
             // get the length of each file name
