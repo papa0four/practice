@@ -147,6 +147,7 @@ def is_client_file(dir, file):
             return False
     else:
         print("No such file or directory")
+
         return False
 
 '''
@@ -224,7 +225,7 @@ def upload_file(menu_option):
                 totalsent += sent
                 print("Sent to upload request to server")
         except OSError:
-            exit()
+            raise RuntimeError("Could not send upload request command")
         user_in = input("Enter the directory location of your file: ")
         user_in = user_in.rstrip()
         dir = "/home/jes/Documents/Practice/threading/" + user_in + "/"
@@ -232,7 +233,6 @@ def upload_file(menu_option):
         file = file.rstrip()
         if is_client_file(dir, file) is True:
             path = dir + file
-            # sent = cli_socket.send(file.encode('utf-8'))
             file_size = os.path.getsize(path)
             size = struct.pack("I", file_size)
             sent = cli_socket.send(size)
@@ -259,6 +259,12 @@ def upload_file(menu_option):
                         raise RuntimeError("Socket connection broken: sending contents")
                     totalsent += sent
             print("Upload Complete")
+        else:
+            err_code = 666
+            size = struct.pack("I", err_code)
+            sent = cli_socket.send(size)
+            if sent == 0:
+                raise RuntimeError("Socket connection broken: invalid upload file")
     else:
         raise RuntimeError("Invalid menu option received: upload file")
 
