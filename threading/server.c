@@ -109,7 +109,6 @@ void list_dir(int sockfd)
         perror("Could not allocate memory for file_list");
         exit(EXIT_FAILURE);
     }
-    printf("SIZEOF FILE_LIST: %ld\n", sizeof(file_list));
     // open directory and check for error
     if ((d = opendir("FileServer/")) == NULL)
     {
@@ -180,7 +179,12 @@ bool is_file(char* file_name)
     // FileServer directory
     char file_path[] = "FileServer/";
     // allocate memory to create absolute file path
-    char* full_path = calloc((strlen(file_path) + strlen(file_name)), sizeof(char));
+    /**
+     * fix memory allocation here
+     * seems to be an error
+     */
+    char* full_path = NULL;
+    full_path = calloc(1, (strlen(file_path) + strlen(file_name)) + 1);
     if (NULL == full_path)
     {
         errno = ENOMEM;
@@ -218,7 +222,8 @@ void download_file(char* file_passed, int sockfd)
     signed int err_code = -1;
     char* buffer = NULL;
     // allocate memory for absolute path
-    char* full_path = calloc((strlen(file_path) + strlen(file_passed)), sizeof(char));
+    char* full_path = NULL;
+    full_path = calloc(1, (strlen(file_path) + strlen(file_passed)) + 1);
     if (NULL == full_path)
     {
         errno = ENOMEM;
@@ -308,12 +313,24 @@ void download_file(char* file_passed, int sockfd)
 
 void upload_file(char* file_passed, int file_size, int sockfd)
 {
+    if (-1 == file_size)
+    {
+        printf("Error received from client\n");
+        printf("Upload failed...\n");
+        return;
+    }
     FILE* fp = NULL;
     char file_path[] = "FileServer/";
     int bytes_recv = 0;
     signed int err_code = -1;
     char* buffer = NULL;
-    char* full_path = calloc(1, (strlen(file_path) + strlen(file_passed)) + 1);
+    char* full_path = NULL;
+    /**
+     * appears to be an issue with the way
+     * memory is allocated for the full file path
+     * needs to be fixed when running with valgrind
+     */
+    full_path = calloc(1, (strlen(file_path) + strlen(file_passed)) + 1);
     if (NULL == full_path)
     {
         errno = ENOMEM;
@@ -369,6 +386,7 @@ void upload_file(char* file_passed, int file_size, int sockfd)
     full_path = NULL;
     free(buffer);
     buffer = NULL;
+    printf("Upload Complete\n");
 }
 
 void end_connection()
@@ -466,6 +484,11 @@ void* server_func()
                                 perror("Upload file size not received");
                                 break;
                             }
+                            else if (666 == upload_file_sz)
+                            {
+                                upload_file_sz = -1;
+                                goto END;
+                            }
                             printf("Uploading file of size %d from client\n", upload_file_sz);
                             file_len_recv = recv(fd, &name_len, sizeof(int), 0);
                             if (0 >= file_len_recv)
@@ -474,7 +497,7 @@ void* server_func()
                                 perror("Upload file name size not received");
                                 break;
                             }
-                            file_name = calloc(1, name_len);
+                            file_name = calloc(1, (name_len + 1));
                             if (NULL == file_name)
                             {
                                 errno = ENOMEM;
@@ -489,8 +512,10 @@ void* server_func()
                                 break;
                             }
                             printf("File name received: %s\n", file_name);
-                            upload_file(file_name, upload_file_sz, fd);
-                            printf("Upload Complete\n");
+                            END:
+                                upload_file(file_name, upload_file_sz, fd);
+                                free(file_name);
+                                file_name = NULL;
                         }
                     }
                     break;
