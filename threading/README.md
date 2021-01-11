@@ -12,7 +12,7 @@ I, the writer of the application, can change the code to allow both applications
 # Server Usage
 To run the File Transfer Program, you can use the Makefile, which compiles the server application with the following flags: *-g -Wall -Werror -Wextra -Wpedantic -std=c11 -pthread*
 
-If not creating a personal *run* script, you can launch the application by typing the following into the command line:
+If not creating a personal *run* script, you can launch the application by typing the following into the command line: <br />
 *./serv.out -p [port number to run the server on] -t [specified number of clients]*
 
 ## If creating a *run* script
@@ -25,7 +25,7 @@ make && \ <br />
 ---> chmod +x run && ./run
 
 # Client Usage
-Because the client application is written in python, the user can enter the following into the command line:
+Because the client application is written in python, the user can enter the following into the command line: <br />
 python3 client.py 127.0.0.1 [ip address of the server] 31337 [specified port used]
 
 Once run, the client application menu will appear to the user. Additionally, built into the application [menu option 4] is a brief help menu to explain what each option allows. While running, the user can select an option from the menu [1 - 5] where each will briefly prompt the user as to the next step, **SO PLEASE READ EACH PROMPT**
