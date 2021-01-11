@@ -7,65 +7,100 @@ import signal
 import struct
 
 '''
-global file_list variable meant to store directory contents
-from server used in get_file_list and recv_file_list
+GLOBAL VARIABLE: FILE_LIST
+    TYPE: list()
+    BRIEF: stores list of files that exists on file server
+    USAGE: used within the RECV_FILE_LIST and GET_FILE_LIST methods
 '''
 file_list = []
 
 
 '''
-obtain command line arguments of the IP and port and return
-the data to obtain the network socket information
+SOCKET_INFO:
+    PARAMETER: None
+    BRIEF: parses cmdline arguments to get ip address and port info
+    RETURN: server ip address and socket port
 '''
 def socket_info():
+    # call argparse method to grab cmdline arguments
     parser = argparse.ArgumentParser()
+    # creates a host argument to be caught
     parser.add_argument("host")
+    # creates a port argument and ensures it is an int type value
     parser.add_argument("port", type=int)
+    # parses the cmdline arguments
     args = parser.parse_args()
+    # sets host variable to host cmdline argument
     host = args.host
+    # sets port variable to port cmdline argument
     port = args.port
+    # returns host and port variables
     return host, port
 
 '''
-catch SIGINT signal to exit server gracefully if user does not
-enter proper exit menu option
+SIGNAL_HANDLER:
+    PARAMETER: SIG - signal to be caught
+    PARAMETER: FRAME - stack frame pointer during the signal interruption
+    BRIEF: catches the ctrl+c SIGINT signal from the user, 
+            sends exit command to server
+    RETURN: None
 '''
 def signal_handler(sig, frame):
+    # set exit command
     command = 500
+    # pack and send the initial exit command
     exit = struct.pack("I", command)
     sent = cli_socket.send(exit)
+    # create exit message
     goodbye = "exit"
+    # variable to send message in chunks
     totalsent = 0
+    # iterate over message to ensure entire message is sent
     while totalsent < len(goodbye):
         sent = cli_socket.send(goodbye[totalsent:].encode('utf-8'))
+        # check for send failures
         if sent == 0:
             raise RuntimeError("Socket connection broken: sending exit")
+        # increment totalsent variable for loop
         totalsent += sent
+    # print message, close socket and exit client application
     print("\nCtrl+C caught and handled... Goodbye!")
     cli_socket.close()
     sys.exit(0)
 
 '''
-take the return values of socket_info() and create the network
-connection to the server
+GLOBAL: CLI_SOCKET, SERVER_ADDR, PORT
+    BRIEF: creates the socket connection to the server
+    USAGE: calls the socket_info method and creates the socket,
+            exits program on failure
 '''
+# create client application socket
 cli_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+# call custom method to get socket info
 server_addr, port = socket_info()
+# begin try block
 try:
+    # connect to socket and print connection info
     cli_socket.connect((server_addr, port))
     print("Connected to {}:{}".format(server_addr, port))
+# exception on socket connection failure
 except OSError as msg:
     print("Closing socket on failure")
+    # close socket and end client application
     cli_socket.close()
     cli_socket = None
     exit()
 
 '''
-create a main menu method that gives the user the option to upload
-files within their own directories or download files existing within
-the file server
+MAIN_MENU:
+    PARAMETER: None
+    BRIEF: creates and displays a menu for the user to interact with
+            only allows for int value input (1 - 5)
+    RETURN: returns menu option selected on success, exits client program
+            on invalid menu option
 '''
 def main_menu():
+    # server menu display
     print("\n#--------------------------------------------------#")
     print("#-------------------FILE SERVER--------------------#")
     print("#--------------------------------------------------#")
@@ -75,26 +110,35 @@ def main_menu():
     print("3. View Files Currently on the File Server")
     print("4. File Server Help")
     print("5. Exit File Server")
+    # custom cmdline cursor prompt
     menu_option = input("/> ")
+    # remove trailing carriage return
     menu_option.rstrip()
+    # begin try block
     try:
+        # cast menu selection to int type
         in_type = int(menu_option)
+        # ensure value is between 1 and 5
         if in_type <= 5 or in_type >= 1:
+            # return selection
             return in_type
+    # value error exception
     except ValueError:
         print("Invalid menu option selected... Breaking connection")
         exit()
     
 
 '''
-help menu option method:
-explains how to view File Server Directory Contents
-explains how to download a file from the file server
-explains how to upload a file from your workstation to the file server
+HELP_OPTION:
+    PARAMETER: MENU_OPTION - int value of 4
+    BRIEF: prints a brief synopsis of how to use the client application
+    RETURN: None
 '''
 # come back to this after setting up improved functionality
 def help_option(menu_option):
+    # ensure parameter is the help menu option
     if menu_option == 4:
+        # display help transcript
         print("\n#--------------------------------------------------#")
         print("#--------------------HELP MENU---------------------#")
         print("#--------------------------------------------------#")
@@ -105,109 +149,167 @@ def help_option(menu_option):
         print("If necessary, the user can enter 'ctrl+c' to gracefully exit the program")     
 
 '''
-simple exit command for quitting file server
+EXIT_SERVER:
+    PARAMETER: MENU_OPTION - int value of 5
+    BRIEF: allows for a graceful client connection closure
+    RETURN: None
 '''
 def exit_server(menu_option):
+    # ensure parameter is exit menu option
     if menu_option == 5:
+        # define exit command
         command = 500
+        # pack the command value to be sent over socket and send command
         exit = struct.pack("I", command)
         sent = cli_socket.send(exit)
+        # define exit message to be sent to server
         goodbye = "exit"
+        # define variable to ensure all bytes are sent
         totalsent = 0
+        # loop through and ensure entire message is sent
         while totalsent < len(goodbye):
+            # send message to server
             sent = cli_socket.send(goodbye[totalsent:].encode('utf-8'))
+            # check for bytes sent failure
             if sent == 0:
                 raise RuntimeError("Socket connection broken: sending exit")
+            # increment totalsent by actual bytes sent
             totalsent += sent
+        # goodbye message and close socket
         print("Thank you.... Goodbye!")
         cli_socket.close()
 
 '''
-obtain the file size requested for download from the server
-used to make sure the appropriate amount of data is downloaded
-from the server in order to ensure proper file transfer
+GET_FILE_SIZE:
+    PARAMETER: None
+    BRIEF: gets the size of the file to be used in the download_file method
+    RETURN: FILE_SIZE - int value size of file to be downloaded
 '''
 def get_file_size():
+    # receive file size bytes from server
     data = cli_socket.recv(8)
+    # properly orders and translates the file size value
     file_size = int.from_bytes(data, byteorder='little', signed=True)
+    # return the size of the file
     return file_size
 
 '''
-perform avalidation check to determine if the client specified directory
-and file exists within the client machine
+IS_CLIENT_FILE:
+    PARAMETER: DIR - directory to check for valid client file
+    PARAMETER: FILE - file to check for validity
+    BRIEF: checks the validity of a directory and file passed by the user
+            meant to be uploaded to the server
+    RETURN: (bool) true on success (file/directory), false on failures
 '''
 def is_client_file(dir, file):
+    # checks if dir is a valid file system location
     if os.path.isdir(dir):
+        # creates the absolute path for the file to be uploaded
         path = dir + file
+        # checks the validity of the file passed
         if os.path.isfile(path):
             print("OK")
+            # return true on success false on failure
             return True
         else:
             return False
+    # returns false on directory verification
     else:
         print("No such file or directory")
-
         return False
 
 '''
-create a new file after calling download functionality
-allows the user to create a file within the "Client" directory
-saves the downloaded contents to the newly created file
+DOWNLOAD_FILE:
+    PARAMETER: None
+    BRIEF: allows the client to download a specified file from the server
+    RETURN: None, returns None on failure for execution
 '''
 def download_file():
+    # call the get_file_size method
     requested_file_sz = get_file_size()
+    # check for error
     if requested_file_sz == -1:
         print("Requested file not found on server...")
+        # returns None on failure
         return None
+    # prompt the user to enter a file name for storage
     newfile = input("Enter the name you wish to store your file as: ")
+    # strip carriage return from input
     newfile = newfile.rstrip()
+    # create absolute path for file storage
     download_path = "Client/" + newfile
+    # set variable to allow for data transfer in chunks
     bytes_left = requested_file_sz
     print("The requested file is {} bytes in length".format(requested_file_sz))
+    # begin try block
     try:
+        # create and open file location in bytes/append mode
         with open(download_path, 'wb+') as file_ptr:
+            # iterate over expected file size
             while bytes_left > 0:
+                # recv file data in chunks of 1024
                 contents = cli_socket.recv(1024)
+                # check for download errors
                 if contents is None:
                     raise RuntimeError("Socket connection broken: download")
+                # write file bytes to newly created file
                 file_ptr.write(contents)
+                # decrement iterator for loop
                 bytes_left -= 1024
+        # display download completion to user
         print("Total bytes downloaded: {}".format(requested_file_sz))
         print("DONE")
+    # except on file system error
     except OSError:
         print("Could not download file from server")
 
 
 '''
-allow the user to select a file from the list received from the
-server, and give the user the option to read the contents
-or download the file
+DOWNLOAD_EXISTING_FILE:
+    PARAMETER: MENU_OPTION - menu option 1
+    BRIEF: sends download command to server and allows the user to obtain
+            a file located on the server
+    RETURN: None
 '''
 def download_existing_file(menu_option):
+    # check if parameter is menu option 1
     if menu_option == 1:
+        # set download command
         command = 200
+        # pack the command value and send to server
         d_load = struct.pack("I", command)
         sent = cli_socket.send(d_load)
+        # check for send error
         if sent == 0:
             raise RuntimeError("Socket connection broken: send download command")
+        # prompt the user to enter the requested file
         choice = input("Type the name of the file you wish to download: ")
+        # strip the carriage return from input
         choice = choice.rstrip()
+        # totalsent variable for loop iteration
         totalsent = 0
+        # ensure entire download message is sent to server
         while totalsent < len(choice):
             sent = cli_socket.send(choice[totalsent:].encode('utf-8'))
+            # check for send failures
             if sent == 0:
                 raise RuntimeError("Socket connection broken: choose action - file")
             totalsent += sent
+        # print message to user and call download_file method
         print("You chose to download {} from the server".format(choice))
         download_file()
+    # should never reach this statement but handles invalid parameter passed
     else:
         raise RuntimeError("Invalid menu option received: download existing")
 
 '''
-call validation check on user_in and prepare and send file
-for upload to File Server
+UPLOAD_FILE:
+    PARAMETER: MENU_OPTION - menu option 2 for file upload
+    BRIEF: allows the client to specify a file to send to the server
+    RETURN: None
 '''
 def upload_file(menu_option):
+    # check if parameter passed is upload menu option
     if menu_option == 2:
         command = 300
         upload = struct.pack("I", command)
@@ -227,7 +329,8 @@ def upload_file(menu_option):
             raise RuntimeError("Could not send upload request command")
         user_in = input("Enter the directory location of your file: ")
         user_in = user_in.rstrip()
-        dir = "/home/jes/Documents/Practice/threading/" + user_in + "/"
+        cwd = os.getcwd()
+        dir = cwd + "/" + user_in + "/"
         file = input("Enter the file you wish to upload: hint - include extension\n")
         file = file.rstrip()
         if is_client_file(dir, file) is True:
@@ -279,7 +382,6 @@ def recv_file_list():
     received = 0
     total_recv = 0
     data = b''
-    #add second recv call to get file name and append to list
     while received < file_count:
         file_len = cli_socket.recv(8)
         file_len = int.from_bytes(file_len, "little", signed=True)
@@ -312,7 +414,11 @@ def get_file_list(menu_option):
         raise RuntimeError("Invalid menu option received: get file")
     file_list.clear()
 
-    
+'''
+MAIN:
+    BRIEF: main method to call client application functionality
+    USAGE: calls all necessary methods and disallows invalid input from the user
+'''
 if __name__ == "__main__":
     signal.signal(signal.SIGINT, signal_handler)
     while True:
