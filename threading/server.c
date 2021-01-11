@@ -35,8 +35,6 @@ void handle_signal(int sig_no)
         serv_running = false;
         // unlock shared resources
         pthread_mutex_unlock(&pool->lock);
-        // call resource cleanup function
-        pool_cleanup();
     }
 } // end handle signal
 
@@ -478,11 +476,12 @@ void* server_func()
                         {
                             printf("upload request received\n");
                             sz_recv = recv(fd, &upload_file_sz, sizeof(int), 0);
-                            if (0 >= sz_recv)
+                            printf("SZ_RECV: %zd\n", sz_recv);
+                            if (0 == sz_recv)
                             {
-                                errno = EINVAL;
-                                perror("Upload file size not received");
-                                break;
+                                upload_file_sz = -1;
+                                command = 666;
+                                goto END;
                             }
                             else if (666 == upload_file_sz)
                             {
@@ -535,6 +534,7 @@ void* server_func()
 
                 default:
                     printf("Invalid command received from the client\n");
+                    command = EXIT;
                     break;
             }
             memset(client_msg, 0, sizeof(client_msg));
@@ -584,7 +584,8 @@ int init_threadpool(threadpool* pool, size_t num_of_clients)
 
 void handle_incoming_client(int client_fd)
 {
-    item* q_item = calloc(1, sizeof(item));
+    item* q_item = NULL;
+    q_item = calloc(1, sizeof(item));
     if (NULL == q_item)
     {
         errno = ENOMEM;
@@ -596,11 +597,13 @@ void handle_incoming_client(int client_fd)
     enqueue(fd_queue, *q_item);
     pthread_mutex_unlock(&pool->lock);
     pthread_cond_broadcast(&pool->condition);
+    free(q_item);
+    q_item = NULL;
 }
 
-void pool_cleanup()
+void pool_cleanup(size_t threads)
 {
-    for (size_t i = 0; i < pool->max_thread_cnt; i++)
+    for (size_t i = 0; i < threads; i++)
     {
         pthread_cond_broadcast(&pool->condition);
         pthread_join(pool->threads[i], NULL);
@@ -741,7 +744,7 @@ int main (int argc, char** argv)
         handle_incoming_client(connfd);
         if (false == serv_running)
         {
-            pool_cleanup();
+            pool_cleanup(num_of_clients);
             break;
         }
         if (clients_con > num_of_clients)
@@ -752,6 +755,10 @@ int main (int argc, char** argv)
     }
     END:
         close(sockfd);
-        pool_cleanup();
+        pool_cleanup(num_of_clients);
+        free(fd_queue);
+        fd_queue = NULL;
+        free(pool);
+        pool = NULL;
         return EXIT_SUCCESS;
 }

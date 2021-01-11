@@ -119,7 +119,6 @@ def exit_server(menu_option):
             if sent == 0:
                 raise RuntimeError("Socket connection broken: sending exit")
             totalsent += sent
-            print(goodbye)
         print("Thank you.... Goodbye!")
         cli_socket.close()
 

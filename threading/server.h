@@ -23,7 +23,7 @@ struct dirent* dir;
 typedef struct _thread_pool {
     pthread_t* threads;
     size_t max_thread_cnt;
-    volatile int thread_cnt;
+    size_t thread_cnt;
     pthread_mutex_t lock;
     pthread_cond_t condition;
 }threadpool;
@@ -39,6 +39,6 @@ void end_connection();
 bool ip_is_valid(char* ip_addr);
 int init_threadpool(threadpool* pool, size_t num_of_clients);
 void handle_incoming_client(int client_fd);
-void pool_cleanup();
+void pool_cleanup(size_t threads);
 
 #endif
