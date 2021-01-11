@@ -16,10 +16,10 @@ If not creating a personal *run* script, you can launch the application by typin
 *./serv.out -p [port number to run the server on] -t [specified number of clients]*
 
 ## If creating a *run* script
-It is advised to use the following within an executable file:
---- EXAMPLE ---
-make clean && \
-make && \
+It is advised to use the following within an executable file: <br />
+--- EXAMPLE --- <br />
+make clean && \ <br />
+make && \ <br />
 ./serv.out -p 31337 -t 10
 
 ---> chmod +x run && ./run
