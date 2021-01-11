@@ -562,7 +562,7 @@ void* server_func()
                                 goto END;
                             }
                             // check for error code from client of invalid file
-                            else if (666 == upload_file_sz)
+                            else if (666 == upload_file_sz || 500 == upload_file_sz)
                             {
                                 upload_file_sz = -1;
                                 goto END;
