@@ -10,7 +10,8 @@ You can simply make them and move the relevant practice files within. That way t
 I, the writer of the application, can change the code to allow both applications to request directory locations for file storage, rather than having hard-coded locations in place.
 
 # Server Usage
-To run the File Transfer Program, you can use the Makefile, which compiles the server application with the following flags: *-g -Wall -Werror -Wextra -Wpedantic -std=c11 -pthread*
+To run the File Transfer Program, you can use the Makefile, which compiles the server application with the following flags: <br />
+*-g -Wall -Werror -Wextra -Wpedantic -std=c11 -pthread*
 
 If not creating a personal *run* script, you can launch the application by typing the following into the command line: <br />
 *./serv.out -p [port number to run the server on] -t [specified number of clients]*
