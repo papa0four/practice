@@ -69,16 +69,9 @@ int dequeue(queue* fd_queue)
     {
         errno = EINVAL;
         perror("queue is empty");
-        return false;
-    }
-    item* p_item = calloc(1, sizeof(item));
-    if (NULL == p_item)
-    {
-        errno = ENOMEM;
-        perror("could not allocate memory for p_item in dequeue");
         return -1;
     }
-    *p_item = fd_queue->head->item;
+    item p_item = fd_queue->head->item;
     node* temp = fd_queue->head;
     fd_queue->head = fd_queue->head->next;
     free(temp);
@@ -88,7 +81,7 @@ int dequeue(queue* fd_queue)
     {
         fd_queue->tail = NULL;
     }
-    return p_item->data;
+    return p_item.data;
 }
 
 void traverse_queue(const queue* fd_queue, void (*func_ptr)(item q_item))
@@ -103,8 +96,13 @@ void traverse_queue(const queue* fd_queue, void (*func_ptr)(item q_item))
 
 void clear(queue* fd_queue)
 {
+    node* temp = NULL;
     while (false == is_empty(fd_queue))
     {
+        temp = fd_queue->head;
         dequeue(fd_queue);
+        fd_queue->head = fd_queue->head->next;
+        free(temp);
+        temp = NULL;
     }
 }
