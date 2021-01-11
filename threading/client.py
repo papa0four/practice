@@ -311,107 +311,159 @@ UPLOAD_FILE:
 def upload_file(menu_option):
     # check if parameter passed is upload menu option
     if menu_option == 2:
+        # create upload command
         command = 300
+        # pack and send upload command to server
         upload = struct.pack("I", command)
         sent = cli_socket.send(upload)
+        # check for send error
         if sent == 0:
             raise RuntimeError("Socket connection broken: upload command")
+        # create totalsent variable to send upload message in chunks
         totalsent = 0
+        # create upload message
         send_file = "upload"
+        # begin try block
         try:
+            # create loop to ensure total message is sent to server
             while totalsent < len(send_file):
                 sent = cli_socket.send(send_file[totalsent:].encode('utf-8'))
+                # check for send error
                 if sent == 0:
                     raise RuntimeError("Socket connection broken: send upload request")
                 totalsent += sent
+                # display upload progress to user
                 print("Sent to upload request to server")
+        # check for file system errors
         except OSError:
             raise RuntimeError("Could not send upload request command")
+        # enter the directory location of files to upload
         user_in = input("Enter the directory location of your file: ")
+        # strip trailing carriage return from input
         user_in = user_in.rstrip()
+        # get current working directory
         cwd = os.getcwd()
+        # set absolute path for file location
         dir = cwd + "/" + user_in + "/"
+        # allow user to input the file to upload
         file = input("Enter the file you wish to upload: hint - include extension\n")
+        #  strip trailing carriage return from input
         file = file.rstrip()
+        # call is_client_file method to validate selected upload file
         if is_client_file(dir, file) is True:
+            # create absolute path to file
             path = dir + file
+            # get and send size of requested upload file
             file_size = os.path.getsize(path)
             size = struct.pack("I", file_size)
             sent = cli_socket.send(size)
+            # check for send errors
             if sent == 0:
                 raise RuntimeError("Socket connection broken: upload file size")
+            # set and send length of file name
             name_len = len(file)
             n_len = struct.pack("I", name_len)
             sent = cli_socket.send(n_len)
+            # check for send errors
             if sent == 0:
                 raise RuntimeError("Socket connection broken: file name size")
+            # variable to allow for file name to be sent in chunks
             totalsent = 0
             while totalsent < len(file):
                 sent = cli_socket.send(file[totalsent:].encode('utf-8'))
+                # check for send errors
                 if sent == 0:
                     raise RuntimeError("Socket connection broken: file name")
                 totalsent += sent
+            # variable to allow for file data to be sent in chunks
             totalsent = 0
             print("Sending {} to File Server".format(path))
+            # open requested upload file in read mode
             with open(path, "br") as file_ptr:
+                # send file data in chunks of 1024 bytes
                 while totalsent < file_size:
                     contents = file_ptr.read(1024)
                     sent = cli_socket.send(contents)
+                    # check for send errors
                     if sent == 0:
                         raise RuntimeError("Socket connection broken: sending contents")
                     totalsent += sent
+            # display upload completion message to user
             print("Upload Complete")
+        # if requested file to upload is invalid or client terminates connection mid process
         else:
+            # set error code and send to server
             err_code = 666
             size = struct.pack("I", err_code)
             sent = cli_socket.send(size)
+            # check for send errors
             if sent == 0:
                 raise RuntimeError("Socket connection broken: invalid upload file")
+    # block should never be reached, raises invalid menu option error
     else:
         raise RuntimeError("Invalid menu option received: upload file")
 
 '''
-get the length of the file name
-used as a helper method for the get file lis
-this will allow the directory list call to always grab the
-file listing on the server
+RECV_FILE_LIST:
+    PARAMETER: None
+    BRIEF: receives file list from the server and prints them to the user
+    RETURN: None
 '''
 def recv_file_list():
+    # receives the number of files currently on the file server
     file_count = cli_socket.recv(4)
+    # converts the data received to appropriate int value
     file_count = int.from_bytes(file_count, "little", signed=True)
+    # iteration variable to determine number of files received
     received = 0
-    total_recv = 0
+    # declare empty bytes string
     data = b''
+    # loop through and receive file list from server
     while received < file_count:
+        # get the lengths of the file names and convert to int
         file_len = cli_socket.recv(8)
         file_len = int.from_bytes(file_len, "little", signed=True)
+        # get actual file names and append to global file_list
         data = cli_socket.recv(file_len)
         file_list.append(data.decode('utf-8'))
         received += 1
-        total_recv += file_len
+    # display file list to user
     print(file_list)
 
 '''
-takes the user's input from the main menu,
+GET_FILE_LIST:
+    PARAMETER: MENU_OPTION - menu option 3 for list file server directory
+    BRIEF: sends command to the server to obtain list of current files
+    RETURN: None
 '''
 def get_file_list(menu_option):
+    # ensures parameter passed is menu option 3
     if menu_option == 3:
+        # create list dir command and send to server
         request = 100
         list_dir = struct.pack("I", request)
         sent = cli_socket.send(list_dir)
+        # check for send error
         if sent == 0:
             raise RuntimeError("Socket connection broken: get dir list")
+        # displays list option selection to user
         print("Sent list directory command to server...")
+        # variable for data loop
         totalsent = 0
+        # list contents server message
         list_cmd = "ls"
         while totalsent < len(list_cmd):
             sent = cli_socket.send(list_cmd[totalsent:].encode('utf-8'))
+            # check for send error
             if sent == 0:
                 raise RuntimeError("Socket connection broken: sending list command")
             totalsent += sent
+        # call recv_file_list method to display server contents
         recv_file_list()
+    # should never reach this block, raises runtime error for invalid menu parameter
     else:
         raise RuntimeError("Invalid menu option received: get file")
+    # clear global list variable
     file_list.clear()
 
 '''
