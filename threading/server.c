@@ -535,6 +535,12 @@ void* server_func()
                             // call download file function
                             download_file(client_msg, fd);
                         }
+                        else if (0 > *client_msg)
+                        {
+                            printf("Client has terminated download process\n");
+                            printf("Disconnecting client\n");
+                            command = 500;
+                        }
                         // if file doesnt exist
                         else
                         {
