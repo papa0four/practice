@@ -286,6 +286,7 @@ def download_existing_file(menu_option):
         choice = input("Type the name of the file you wish to download: ")
         # strip the carriage return from input
         choice = choice.rstrip()
+        print(choice)
         # totalsent variable for loop iteration
         totalsent = 0
         # ensure entire download message is sent to server
