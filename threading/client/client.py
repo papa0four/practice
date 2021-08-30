@@ -147,9 +147,7 @@ def get_file_size():
         RETURN: FILE_SIZE - int value size of file to be downloaded
     '''
     data = cli_socket.recv(8)
-    print(f"data: {data}")
     file_size = int.from_bytes(data, byteorder='big', signed=True)
-    print(f"file_size: {file_size}")
     return file_size
 
 def is_client_file(dir, file):

@@ -2,13 +2,6 @@
 #define _GNU_SOURCE
 #include "../includes/server.h"
 
-/* global variables */
-bool            serv_running = true;
-bool            exiting      = false;
-size_t          clients_con  = 0;
-threadpool    * p_tpool      = NULL;
-queue         * p_queue      = NULL;
-
 void handle_signal (int sig_no)
 {
     if (SIGINT == sig_no)
@@ -18,15 +11,6 @@ void handle_signal (int sig_no)
         serv_running = false;
         pthread_mutex_unlock(&p_tpool->lock);
     }
-}
-
-void end_connection()
-{
-    pthread_mutex_lock(&p_tpool->lock);
-    p_tpool->thread_cnt--;
-    pthread_mutex_unlock(&p_tpool->lock);
-    clients_con--;
-    printf("Number of current connections: %ld\n", clients_con);
 }
 
 void * server_func ()
@@ -212,157 +196,8 @@ void * server_func ()
     return NULL;
 }
 
-int init_threadpool(threadpool* p_tpool, size_t num_of_clients)
-{
-    if (NULL == p_tpool)
-    {
-        errno = EINVAL;
-        perror("Pool passed is NULL");
-        return -1;
-    }
-
-    if (0 == num_of_clients)
-    {
-        num_of_clients = MAX_CLIENTS;
-    }
-
-    p_tpool->threads = calloc(num_of_clients, sizeof(pthread_t));
-    if (NULL == p_tpool->threads)
-    {
-        errno = ENOMEM;
-        perror("Could not allocate memory for p_tpool->threads");
-        free(p_tpool);
-        p_tpool = NULL;
-        return -1;
-    }
-
-    p_tpool->max_thread_cnt = num_of_clients;
-    pthread_mutex_init(&p_tpool->lock, NULL);
-    pthread_cond_init(&p_tpool->condition, NULL);
-
-    for (size_t i = 0; i < num_of_clients; i++)
-    {
-        if (0 != pthread_create(&p_tpool->threads[i], NULL, server_func, NULL))
-        {
-            errno = EINVAL;
-            perror("Error creating thread");
-        }
-    }
-
-    return 0;
-}
-
-void handle_incoming_client(int client_fd)
-{
-    item * q_item = NULL;
-    q_item = calloc(1, sizeof(item));
-    if (NULL == q_item)
-    {
-        errno = ENOMEM;
-        perror("Could not allocate memory for q_item");
-        exit(-1);
-    }
-    q_item->data = client_fd;
-    pthread_mutex_lock(&p_tpool->lock);
-    enqueue(p_queue, *q_item);
-    pthread_mutex_unlock(&p_tpool->lock);
-    pthread_cond_broadcast(&p_tpool->condition);
-
-    CLEAN(q_item);
-}
-
-void pool_cleanup (size_t num_threads)
-{
-    if ((NULL == p_tpool) || (NULL == p_tpool->threads))
-    {
-        fprintf(stderr, "%s pointer to the threadpool is NULL\n", __func__);
-        return;
-    }
-    pthread_cond_broadcast(&p_tpool->condition);
-    for (size_t idx = 0; idx < num_threads; idx++)
-    {
-        if (p_tpool->threads[idx])
-        {
-            pthread_join(p_tpool->threads[idx], NULL);
-        }
-    }
-
-    clear(p_queue);
-    CLEAN(p_tpool->threads);
-    pthread_mutex_destroy(&p_tpool->lock);
-    pthread_cond_destroy(&p_tpool->condition);
-    CLEAN(p_tpool);
-}
-
 int main (int argc, char** argv)
 {
-    // main variables
-    int sockfd = 0;
-    int opt = 0;
-    int port = 0;
-    const int enable = 1;
-    size_t thread_cnt = 0;
-    size_t num_of_clients = 0;
-    struct sockaddr_in serv_addr;
-	struct sockaddr_in cli_addr;
-	socklen_t cli_addr_len;
-
-    if (1 >= argc)
-    {
-        // set errno value and error message
-        errno = EINVAL;
-        perror("Invalid arguments passed\nRequired Argument\n\t-p [SRV_PORT]:"
-				"Optional Argument\n\t-t [MAX_ALLOWED_CLIENTS]\n");
-        exit(EXIT_FAILURE);
-    }
-
-    while ((opt = getopt(argc, argv, ":p:t:")) != -1)
-    {
-        switch(opt)
-        {
-            case 'p':
-                port = strtol(optarg, NULL, 10);
-                if (1025 > port || 65535 < port)
-                {
-                    errno = EINVAL;
-                    // create error message
-                    perror("Invalid port argument passed\n"
-                    "Valid port range: 1025 - 65535");
-                    exit(EXIT_FAILURE);
-                }
-                break;
-
-            case 't':
-                thread_cnt = strtol(optarg, NULL, 10);
-                if (1 > thread_cnt)
-                {
-                    errno = EINVAL;
-                    perror("invalid thread number passed, must be >= 1");
-                    exit(EXIT_FAILURE);
-                }
-
-                num_of_clients = thread_cnt;
-
-                if (MAX_CLIENTS < num_of_clients)
-                {
-                    printf("Server cannot contain more than %d clients\n"
-                            "Setting default to: %d\n", MAX_CLIENTS, MAX_CLIENTS);
-                    num_of_clients = MAX_CLIENTS;
-                }
-				else if ('?' == *optarg)
-				{
-					printf("No client capacity set: setting default to %d\n", MAX_CLIENTS);
-					num_of_clients = MAX_CLIENTS;
-				}
-                break;
-
-            default:
-                printf("Invalid cmdline argument passed\nRequired Argument\n\t-p [SRV_PORT]:\n"
-                        "Optional Argument\n\t-t [CLIENT_AMOUNT] (argument optional)\n");
-                exit(-1);
-        }
-    }
-
     struct sigaction ig_SIGINT = { 0 };
     ig_SIGINT.sa_handler = handle_signal;
     if (0 > sigaction(SIGINT, &ig_SIGINT, NULL))
@@ -370,98 +205,121 @@ int main (int argc, char** argv)
         exit(-1);
     }
 
-	memset(&cli_addr, 0, sizeof(cli_addr));
+    // main variables
+    int sockfd = 0;
+    int ret_val = -1;
 
+    ret_val = init_globals();
+    if (-1 == ret_val)
+    {
+        fprintf(stderr, "%s failed to initialize all global data\n", __func__);
+        return EXIT_FAILURE;
+    }
+
+    setup_info_t * p_setup = handle_setup(argc, argv);
+
+    printf("port passed: %s\n", p_setup->port);
 	char * p_addr = SERV_ADDR;
 
-    p_queue = init_queue();
-    p_tpool = calloc(1, sizeof(threadpool));
-    if (NULL == p_tpool)
-    {
-        errno = ENOMEM;
-        perror("Could not allocat memory for p_tpool in main");
-        exit(EXIT_FAILURE);
-    }
+    init_threadpool(p_tpool, p_setup->num_allowable_clients);
 
-    init_threadpool(p_tpool, num_of_clients);
+    struct addrinfo p_server = { 0 };
+    p_server = setup_server(&p_server);
+    struct sockaddr_storage cli_address = { 0 };
+    socklen_t cli_addr_len = sizeof(cli_address);
 
-    sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (-1 == sockfd)
-    {
-        errno = ENOTSOCK;
-        perror("Could not create socket");
-        exit(EXIT_FAILURE);
-    }
-
-    if(setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) == -1)
-    {
-        errno = ENOTSOCK;
-        perror("Could not set socket option");
-        exit(EXIT_FAILURE);
-    }
-
-	memset(&serv_addr, 0, sizeof(serv_addr));
-
-	serv_addr.sin_family = AF_INET;
-	serv_addr.sin_addr.s_addr = inet_addr(p_addr);
-	serv_addr.sin_port = htons(port);
-
-    if ((bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr))) != 0)
-    {
-        perror("Could not bind on socket");
-        exit(EXIT_FAILURE);
-    }
-
-    if ((listen(sockfd, 1)) != 0)
+    sockfd = setup_socket(&p_server, p_setup->port);
+    if ((listen(sockfd, MAXQUEUE)) != 0)
     {
         perror("listen call failed");
         exit(EXIT_FAILURE);
     }
     else
     {
-        printf("Server listening on - %s:%d\n", p_addr, port);
+        printf("Server listening on - %s:%s\n", p_addr, p_setup->port);
     }
 
-    cli_addr_len = sizeof(cli_addr);
+    int timeout     = 60000;
+    int fd_count    = 1;
+    int fd_size     = MAXQUEUE;
+
+    struct pollfd * pfds = calloc(fd_size, sizeof(*pfds));
+    if (NULL == pfds)
+    {
+        errno = ENOMEM;
+        fprintf(stderr, "%s could not allocate pfds array: %s\n", __func__, strerror(errno));
+        goto CLEANUP;
+    }
+
+    pfds[0].fd      = sockfd;
+    pfds[0].events  = POLLIN;
 
     while (serv_running)
     {
 
-        printf("Number of total clients allowed: %ld\n", num_of_clients);
+        printf("Number of total clients allowed: %ld\n", p_setup->num_allowable_clients);
         printf("Number of current connections to server: %ld\n", clients_con);
 
-        int connfd = accept(sockfd, (struct sockaddr *)&cli_addr, &cli_addr_len);
-        if (-1 == connfd)
+        int poll_count = poll(pfds, fd_count, timeout);
+        if (-1 == poll_count)
         {
-            printf("Cleaning up resources\n");
-            pool_cleanup(num_of_clients);
-            goto END;
+            CLEAN(pfds);
+            goto CLEANUP;
         }
 
-        clients_con++;
-        
-        handle_incoming_client(connfd);
+        for (int idx = 0; idx < fd_count; idx++)
+        {
+            if (pfds[idx].revents & POLLIN)
+            {
+                if (sockfd == pfds[idx].fd)
+                {
+                    int connfd = accept(sockfd, (struct sockaddr *)&cli_address, &cli_addr_len);
+                    if (-1 == connfd)
+                    {
+                        printf("Cleaning up resources\n");
+                        CLEAN(pfds);
+                        goto CLEANUP;
+                    }
+                    else
+                    {
+                        clients_con++;
+                        handle_incoming_client(connfd);
 
-        if (false == serv_running)
-        {
-            pool_cleanup(num_of_clients);
-            break;
-        }
-        /**
-         * if more clients than allowed connect
-         * decrease the global back to max allowed
-         * close the socket to prevent further connections
-         * this will not terminate the current authorized connections
-         */
-        if (clients_con > num_of_clients)
-        {
-            clients_con--;
-            close(sockfd);
+                        if (false == serv_running)
+                        {
+                            pool_cleanup(p_setup->num_allowable_clients);
+                            break;
+                        }
+                        /**
+                         * if more clients than allowed connect
+                         * decrease the global back to max allowed
+                         * close the socket to prevent further connections
+                         * this will not terminate the current authorized connections
+                         */
+                        if (clients_con > p_setup->num_allowable_clients)
+                        {
+                            clients_con--;
+                            close(sockfd);
+                        }
+                    }
+                }
+            }
         }
     }
-    // gracefully shuts down the socket and cleans up server resources
-    END:
-        close(sockfd);
-        CLEAN(p_queue);
-        return EXIT_SUCCESS;
+
+    close(sockfd);
+    CLEAN(pfds);
+    CLEAN(p_setup->port);
+    CLEAN(p_setup);
+    CLEAN(p_queue);
+    return EXIT_SUCCESS;
+
+CLEANUP:
+close(sockfd);
+pool_cleanup(p_setup->num_allowable_clients);
+CLEAN(p_setup->port);
+CLEAN(p_setup);
+CLEAN(p_queue);
+return EXIT_FAILURE;
+
 }

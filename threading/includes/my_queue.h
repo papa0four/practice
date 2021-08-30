@@ -1,5 +1,8 @@
-#ifndef MY_QUEUE_H
-#define MY_QUEUE_H
+#ifndef __MY_QUEUE_H__
+#define __MY_QUEUE_H__
+
+#define _XOPEN_SOURCE 700
+#define _GNU_SOURCE
 
 #include <limits.h>
 #include <stdio.h>
@@ -8,8 +11,7 @@
 #include <stdbool.h>
 #include <errno.h>
 
-#include "file_operations.h"
-
+#define CLEAN(a) if (a)free(a);(a)=NULL;
 #define MAXQUEUE 50
 
 /**

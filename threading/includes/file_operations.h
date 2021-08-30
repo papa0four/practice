@@ -15,8 +15,9 @@
 #include <dirent.h>
 #include <sys/socket.h>
 
+#include "global_data.h"
+
 #define MAX_STR_LEN     255
-#define CLEAN(a) if (a)free(a);(a)=NULL;
 
 /**
  * INT GET_FILE_COUNT:
