@@ -1,18 +1,24 @@
-server = serv.out
-server_src = $(wildcard server.c my_queue.c)
+CFLAGS 	= -Wall -Wextra -Werror -Wpedantic -g -std=c11
+LDLIBS 	= -lpthread
 
-server_objects = $(server_src:.c=.o)
-flags = -g -Wall -Werror -Wextra -Wpedantic -std=c11 -pthread
+# Automatic project management
+SRCDIR 	= src
+OBJDIR	= objects
+BINDIR  = bin
+SRCS	= $(wildcard $(SRCDIR)/*.c)
+OBJS	= $(patsubst $(SRCDIR)/%.c, $(OBJDIR)/%.o, $(SRCS))
+BIN    	= $(BINDIR)/server
 
-$(server): $(server_objects)
-	gcc $(server_objects) $(flags) -o $(server)
+all: $(BIN)
 
-%.o: %.c %.h
-	gcc -c $(flags) $< -o $@
+$(BIN): $(OBJS)
+	mkdir -p $(BINDIR)
+	$(CC) $(CFLAGS) $(OBJS) -o $@ $(LDLIBS)
+
+$(OBJDIR)/%.o: $(SRCDIR)/%.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+debug: $(BIN)
 
 clean:
-	-rm *.out
-	-rm *.o
-
-lint:
-	clang-tidy *.c *.h
+	$(RM) $(BIN) $(OBJDIR)/*.o
