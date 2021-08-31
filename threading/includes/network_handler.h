@@ -25,7 +25,14 @@
 #define MAX_PORT     65535
 
 /**
- * 
+ * @brief - a struct to store server specific data, the port received from
+ *          the command line upon server file execution and the total number
+ *          of allowable connections (either passed at cmdline or specified)
+ *          upon execution
+ * @member port - a string representation of the port passed by the user to setup
+ *                the TCP client connections
+ * @member num_allowable_clients - received either from the command line or within
+ *                                 setup 
  */
 typedef struct setup_info
 {
@@ -34,7 +41,13 @@ typedef struct setup_info
 } setup_info_t;
 
 /**
- * 
+ * SETUP_INFO_T * HANDLE_SETUP:
+ * @brief - handles the command line arguments passed upon server execution
+ *          parses the command line arguments and stores the data appropriately
+ * @param argc - the number of command line arguments present
+ * @param argv - the array storing the actual command line arguments passed
+ * @return - a pointer to the server setup struct containing the port and the
+ *           number of allowable clients or NULL on error
  */
 setup_info_t * handle_setup(int argc, char ** argv);
 

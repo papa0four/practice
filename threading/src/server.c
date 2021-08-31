@@ -328,6 +328,13 @@ int main (int argc, char** argv)
     }
 
     setup_info_t * p_setup = handle_setup(argc, argv);
+    if (NULL == p_setup)
+    {
+        CLEAN(p_tpool);
+        CLEAN(p_queue);
+        return EXIT_FAILURE;
+    }
+
     ret_val = init_threadpool(p_tpool, p_setup->num_allowable_clients);
     if (-1 == ret_val)
     {

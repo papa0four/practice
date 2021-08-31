@@ -2,7 +2,8 @@
 
 setup_info_t * handle_setup (int argc, char ** argv)
 {
-    if ((argc <= 1) || (NULL == argv) || (NULL == *argv))
+    printf("argc: %d\n", argc);
+    if ((argc <= 4) || (NULL == argv) || (NULL == *argv))
     {
         // set errno value and error message
         errno = EINVAL;
@@ -65,11 +66,6 @@ setup_info_t * handle_setup (int argc, char ** argv)
                             "Setting default to: %d\n", MAX_CLIENTS, MAX_CLIENTS);
                     p_setup->num_allowable_clients = MAX_CLIENTS;
                 }
-				else if ('?' == *optarg)
-				{
-					printf("No client capacity set: setting default to %d\n", MAX_CLIENTS);
-					p_setup->num_allowable_clients = MAX_CLIENTS;
-				}
                 break;
 
             default:

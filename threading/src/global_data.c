@@ -39,7 +39,7 @@ int init_threadpool(threadpool_t * p_tpool, size_t num_of_clients)
         perror("Pool passed is NULL");
         return -1;
     }
-
+    printf("num_of_clients: %ld\n", num_of_clients);
     if (0 == num_of_clients)
     {
         num_of_clients = MAX_CLIENTS;

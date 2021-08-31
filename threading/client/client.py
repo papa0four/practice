@@ -44,11 +44,14 @@ def signal_handler(sig, frame):
     goodbye = "exit"
     totalsent = 0
 
-    while totalsent < len(goodbye):
-        sent = cli_socket.send(goodbye[totalsent:].encode('utf-8'))
-        if sent == 0:
-            raise RuntimeError("Socket connection broken: sending exit")
-        totalsent += sent
+    try:
+        while totalsent < len(goodbye):
+            sent = cli_socket.send(goodbye[totalsent:].encode('utf-8'))
+            if sent == 0:
+                raise RuntimeError("Socket connection broken: sending exit")
+            totalsent += sent
+    except (BrokenPipeError, OSError):
+        exit()
 
     print("\nCtrl+C caught and handled... Goodbye!")
     cli_socket.close()
@@ -367,17 +370,20 @@ if __name__ == "__main__":
     '''
     signal.signal(signal.SIGINT, signal_handler)
     while True:
-        user_in = main_menu()
-        if user_in == 1:
-            download_existing_file(user_in)
-        elif user_in == 2:
-            upload_file(user_in)
-        elif user_in == 3:
-            get_file_list(user_in)
-        elif user_in == 4:
-            help_option(user_in)
-        elif user_in == 5:
-            exit_server(user_in)
+        try:
+            user_in = main_menu()
+            if user_in == 1:
+                download_existing_file(user_in)
+            elif user_in == 2:
+                upload_file(user_in)
+            elif user_in == 3:
+                get_file_list(user_in)
+            elif user_in == 4:
+                help_option(user_in)
+            elif user_in == 5:
+                exit_server(user_in)
+                exit()
+            elif user_in > 5 or user_in <= 0:
+                print("Please select an appropriate menu option...")
+        except TypeError:
             exit()
-        elif user_in > 5 or user_in <= 0:
-            print("Please select an appropriate menu option...")
