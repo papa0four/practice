@@ -65,6 +65,4 @@ void handle_incoming_client (int client_fd);
  */
 void end_connection ();
 
-
-
 #endif

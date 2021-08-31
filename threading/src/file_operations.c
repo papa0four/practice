@@ -146,6 +146,7 @@ void download_file (char * p_file_passed, int sockfd)
     fp = fopen(p_fullpath, "rb");
     if (NULL == fp)
     {
+        printf("error occurred, file not found\n");
         errno = ENOENT;
         perror("Could not open file passed");
         send(sockfd, &err_code, sizeof(int), 0);
@@ -209,7 +210,7 @@ void download_file (char * p_file_passed, int sockfd)
 
 void upload_file (char * p_file_passed, int file_size, int sockfd)
 {
-    if (-1 == file_size)
+    if ((-1 == file_size) || (NULL == p_file_passed))
     {
         fprintf(stderr, "Error received from client\n");
         fprintf(stderr, "Upload failed...\n");

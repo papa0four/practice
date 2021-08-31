@@ -13,22 +13,155 @@ void handle_signal (int sig_no)
     }
 }
 
+int recv_upload_sz (int sock_fd)
+{
+    if (-1 == sock_fd)
+    {
+        errno = EBADF;
+        fprintf(stderr, "%s client file descriptor passed is invalid: %s\n", __func__, strerror(errno));
+        return -1;
+    }
+
+    ssize_t bytes_recv = -1;
+    int     file_sz    = -1;
+
+    bytes_recv = recv(sock_fd, &file_sz, sizeof(int), 0);
+    if (-1 == bytes_recv)
+    {
+        errno = EBADF;
+        fprintf(stderr, "%s could not recv size of file to upload: %s\n", __func__, strerror(errno));
+        return -1;
+    }
+
+    if (ERROR == file_sz)
+    {
+        return -1;
+    }
+
+    return file_sz;
+}
+
+upload_file_t * recv_upload_fname (int sock_fd)
+{
+    if (-1 == sock_fd)
+    {
+        errno = EBADF;
+        fprintf(stderr, "%s client file descriptor passed is invalid: %s\n", __func__, strerror(errno));
+        return NULL;
+    }
+
+    ssize_t bytes_recv = -1;
+    upload_file_t * p_file = calloc(1, sizeof(upload_file_t));
+    if (NULL == p_file)
+    {
+        errno = ENOMEM;
+        fprintf(stderr, "%s could not allocate memory for upload file data: %s\n", __func__, strerror(errno));
+        return NULL;
+    }
+
+    bytes_recv = recv(sock_fd, &p_file->name_len, sizeof(int), 0);
+    if (-1 == bytes_recv)
+    {
+        errno = EBADF;
+        fprintf(stderr, "%s could not recv filename data from client: %s\n", __func__, strerror(errno));
+        CLEAN(p_file);
+        return NULL;
+    }
+
+    bytes_recv = recv(sock_fd, p_file->filename, p_file->name_len, 0);
+    if (-1 == bytes_recv)
+    {
+        errno = EBADF;
+        fprintf(stderr, "%s could not recv filename data from client: %s\n", __func__, strerror(errno));
+        CLEAN(p_file);
+        return NULL;
+    }
+
+    return p_file;
+}
+
+int send_data_to_client (int sock_fd, int operation)
+{
+    if (-1 == sock_fd)
+    {
+        errno = EBADF;
+        fprintf(stderr, "%s client file descriptor passed is invalid: %s\n", __func__, strerror(errno));
+        return -1;
+    }
+
+    ssize_t bytes_recv = -1;
+    char    client_msg[MAX_STR_LEN] = { 0 };
+
+    switch (operation)
+    {
+        case LIST:
+            bytes_recv = recv(sock_fd, client_msg, sizeof(client_msg), 0);
+            if (-1 == bytes_recv)
+            {
+                errno = EBADF;
+                fprintf(stderr, "%s could not receive command from the client: %s\n", __func__, strerror(errno));
+                return -1;
+            }
+
+            if (0 == (strncmp(client_msg, LIST_DIR, strlen(LIST_DIR))))
+            {
+                fprintf(stdout, "sending directory list to client...\n");
+                list_dir(sock_fd);
+            }
+            else
+            {
+                fprintf(stderr, "%s invalid directory list command received\n", __func__);
+                return -1;
+            }
+            break;
+
+        case DOWNLOAD:
+            bytes_recv = recv(sock_fd, client_msg, sizeof(client_msg), 0);
+            if (-1 == bytes_recv)
+            {
+                errno = EBADF;
+                fprintf(stderr, "%s could not received download command from client: %s\n", __func__, strerror(errno));
+                return -1;
+            }
+            else if (true == is_file(client_msg))
+            {
+                printf("OK\n");
+                printf("Sending client %s contents ...\n", client_msg);
+                download_file(client_msg, sock_fd);
+            }
+            else if (0 > *client_msg)
+            {
+                printf("Client has terminated download process\n");
+                printf("Disconnecting client\n");
+                return -1;
+            }
+            else
+            {
+                download_file(client_msg, sock_fd);
+            }
+            break;
+
+        default:
+            fprintf(stderr, "%s invalid operation received from client\n", __func__);
+            return -1;
+    }
+
+    return 0;   
+}
+
 void * server_func ()
 {
     // local variables
     int command = 0;
     char client_msg[MAX_STR_LEN] = { 0 };
-    char * p_filename = NULL;
     int err_code = 999;
     int * p_err = &err_code;
     ssize_t bytes_recv = 0;
     ssize_t msg_recv = 0;
-    ssize_t sz_recv = 0;
-    int name_len = 0;
-    ssize_t file_len_recv = 0;
-    ssize_t file_recv = 0;
     int upload_file_sz = 0;
     int fd = 0;
+    int ret_val = -1;
+    upload_file_t * p_file = NULL;
 
     while (serv_running)
     {
@@ -59,49 +192,25 @@ void * server_func ()
                 break;
             }
 
-            printf("Received from client: %d\n", command);
             switch(command)
             {
                 // command = 100, send dir list to client
                 case(LIST):
-                    if (LIST == command)
+                    ret_val = send_data_to_client(fd, command);
+                    if (-1 == ret_val)
                     {
-                        msg_recv = recv(fd, client_msg, sizeof(client_msg), 0);
-
-                        printf("CLIENT_MSG: %s\n", client_msg);
-                        if (0 == (strncmp(client_msg, "ls", strlen(client_msg))))
-                        {
-                            printf("Sending directory list...\n");
-                            list_dir(fd);
-                        }
-                        else
-                        {
-                            printf("Invalid list command received\n");
-                        }
+                        command = -1;
+                        break;
                     }
                     break;
 
                 // command = 200, prepare file for download
                 case(DOWNLOAD):
-                    if (DOWNLOAD == command)
+                    ret_val = send_data_to_client(fd, command);
+                    if (-1 == ret_val)
                     {
-                        msg_recv = recv(fd, client_msg, sizeof(client_msg), 0);
-                        if (true == is_file(client_msg))
-                        {
-                            printf("OK\n");
-                            printf("Sending client %s contents ...\n", client_msg);
-                            download_file(client_msg, fd);
-                        }
-                        else if (0 > *client_msg)
-                        {
-                            printf("Client has terminated download process\n");
-                            printf("Disconnecting client\n");
-                            command = 500;
-                        }
-                        else
-                        {
-                            download_file(client_msg, fd);
-                        }
+                        command = -1;
+                        break;
                     }
                     break;
 
@@ -110,51 +219,31 @@ void * server_func ()
                     if (UPLOAD == command)
                     {
                         msg_recv = recv(fd, client_msg, sizeof(client_msg), 0);
-                        if (0 == (strncmp(client_msg, "upload", strlen(client_msg))))
+                        if (0 == (strncmp(client_msg, UPLOAD_FILE, strlen(client_msg))))
                         {
                             printf("upload request received\n");
-                            sz_recv = recv(fd, &upload_file_sz, sizeof(int), 0);
-                            if (0 == sz_recv)
+                            upload_file_sz = recv_upload_sz(fd);
+                            if (-1 == upload_file_sz)
                             {
-                                upload_file_sz = -1;
-                                command = 666;
-                                goto END;
-                            }
-                            else if (666 == upload_file_sz || 500 == upload_file_sz)
-                            {
-                                upload_file_sz = -1;
-                                goto END;
+                                command = -1;
+                                upload_file(NULL, -1, fd);
+                                break;
                             }
                             
                             printf("Uploading file of size %d from client\n", upload_file_sz);
-                            file_len_recv = recv(fd, &name_len, sizeof(int), 0);
-                            if (0 >= file_len_recv)
+                            p_file = recv_upload_fname(fd);
+                            if (NULL == p_file)
                             {
-                                errno = EINVAL;
-                                perror("Upload file name size not received");
+                                command = -1;
+                                upload_file(NULL, -1, fd);
                                 break;
                             }
-
-                            p_filename = calloc((name_len + 1), sizeof(char));
-                            if (NULL == p_filename)
+                            else
                             {
-                                errno = ENOMEM;
-                                perror("Could not allocate memory for p_filename");
-                                break;
+                                printf("File name received: %s\n", p_file->filename);
+                                upload_file(p_file->filename, upload_file_sz, fd);
+                                CLEAN(p_file);
                             }
-
-                            file_recv = recv(fd, p_filename, name_len, 0);
-                            if (0 >= file_recv)
-                            {
-                                errno = EINVAL;
-                                perror("Upload file name not received");
-                                CLEAN(p_filename);
-                                break;
-                            }
-                            printf("File name received: %s\n", p_filename);
-                            END:
-                                upload_file(p_filename, upload_file_sz, fd);
-                                CLEAN(p_filename);
                         }
                     }
                     break;
@@ -175,7 +264,6 @@ void * server_func ()
 
                 // if invalid command is received from client
                 default:
-                    printf("Invalid command received from the client\n");
                     command = EXIT;
                     break;
             }
@@ -196,6 +284,30 @@ void * server_func ()
     return NULL;
 }
 
+struct pollfd * setup_poll (int server_fd, int fd_size)
+{
+    if ((-1 == server_fd) || (fd_size < 1))
+    {
+        errno = EINVAL;
+        fprintf(stderr, "%s() - one or more parameters passed are invalid: %s\n", __func__, strerror(errno));
+        return NULL;
+    }
+
+    struct pollfd * pfds = calloc(fd_size, sizeof(*pfds));
+    if (NULL == pfds)
+    {
+        errno = ENOMEM;
+        fprintf(stderr, "%s could not allocate pfds array: %s\n", __func__, strerror(errno));
+        close(server_fd);
+        return NULL;
+    }
+
+    pfds[0].fd      = server_fd;
+    pfds[0].events  = POLLIN;
+
+    return pfds;
+}
+
 int main (int argc, char** argv)
 {
     struct sigaction ig_SIGINT = { 0 };
@@ -205,7 +317,6 @@ int main (int argc, char** argv)
         exit(-1);
     }
 
-    // main variables
     int sockfd = 0;
     int ret_val = -1;
 
@@ -217,14 +328,16 @@ int main (int argc, char** argv)
     }
 
     setup_info_t * p_setup = handle_setup(argc, argv);
-
-    printf("port passed: %s\n", p_setup->port);
-	char * p_addr = SERV_ADDR;
-
-    init_threadpool(p_tpool, p_setup->num_allowable_clients);
+    ret_val = init_threadpool(p_tpool, p_setup->num_allowable_clients);
+    if (-1 == ret_val)
+    {
+        fprintf(stderr, "%s failed to initialize client threadpool\n", __func__);
+        return EXIT_FAILURE;
+    }
 
     struct addrinfo p_server = { 0 };
     p_server = setup_server(&p_server);
+
     struct sockaddr_storage cli_address = { 0 };
     socklen_t cli_addr_len = sizeof(cli_address);
 
@@ -236,6 +349,7 @@ int main (int argc, char** argv)
     }
     else
     {
+        char * p_addr = SERV_ADDR;
         printf("Server listening on - %s:%s\n", p_addr, p_setup->port);
     }
 
@@ -243,16 +357,11 @@ int main (int argc, char** argv)
     int fd_count    = 1;
     int fd_size     = MAXQUEUE;
 
-    struct pollfd * pfds = calloc(fd_size, sizeof(*pfds));
+    struct pollfd * pfds = setup_poll(sockfd, fd_size);
     if (NULL == pfds)
     {
-        errno = ENOMEM;
-        fprintf(stderr, "%s could not allocate pfds array: %s\n", __func__, strerror(errno));
         goto CLEANUP;
     }
-
-    pfds[0].fd      = sockfd;
-    pfds[0].events  = POLLIN;
 
     while (serv_running)
     {

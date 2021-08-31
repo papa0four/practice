@@ -38,8 +38,8 @@ def signal_handler(sig, frame):
                 sends exit command to server
         RETURN: None
     '''
-    command = 500
-    exit = struct.pack("I", command)
+    command = -1
+    exit = struct.pack("i", command)
     sent = cli_socket.send(exit)
     goodbye = "exit"
     totalsent = 0
@@ -212,32 +212,24 @@ def download_existing_file(menu_option):
         RETURN: None
     '''
     if menu_option == 1:
-        # set download command
         command = 200
-        # pack the command value and send to server
         d_load = struct.pack("I", command)
         sent = cli_socket.send(d_load)
-        # check for send error
+
         if sent == 0:
             raise RuntimeError("Socket connection broken: send download command")
-        # prompt the user to enter the requested file
+
         choice = input("Type the name of the file you wish to download: ")
-        # strip the carriage return from input
         choice = choice.rstrip()
-        print(choice)
-        # totalsent variable for loop iteration
+
         totalsent = 0
-        # ensure entire download message is sent to server
         while totalsent < len(choice):
             sent = cli_socket.send(choice[totalsent:].encode('utf-8'))
-            # check for send failures
             if sent == 0:
                 raise RuntimeError("Socket connection broken: choose action - file")
             totalsent += sent
-        # print message to user and call download_file method
         print("You chose to download {} from the server".format(choice))
         download_file()
-    # should never reach this statement but handles invalid parameter passed
     else:
         raise RuntimeError("Invalid menu option received: download existing")
 
@@ -309,8 +301,8 @@ def upload_file(menu_option):
                     totalsent += sent
             print("Upload Complete")
         else:
-            err_code = 666
-            size = struct.pack("I", err_code)
+            err_code = -1
+            size = struct.pack("i", err_code)
             sent = cli_socket.send(size)
 
             if sent == 0:

@@ -32,9 +32,9 @@ setup_info_t * handle_setup (int argc, char ** argv)
                 if (MIN_PORT > port || MAX_PORT < port)
                 {
                     errno = EINVAL;
-                    // create error message
                     perror("Invalid port argument passed\n"
                     "Valid port range: 1025 - 65535");
+                    CLEAN(p_setup);
                     return NULL;
                 }
                 p_setup->port = calloc(MAX_PORT_LEN, sizeof(char));
@@ -42,6 +42,7 @@ setup_info_t * handle_setup (int argc, char ** argv)
                 {
                     errno = ENOMEM;
                     fprintf(stderr, "%s could not allocate for port member of setup: %s\n", __func__, strerror(errno));
+                    CLEAN(p_setup);
                     return NULL;
                 }
                 memcpy(p_setup->port, optarg, MAX_PORT_LEN);
