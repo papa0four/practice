@@ -53,8 +53,6 @@ void list_dir (int sockfd)
         fprintf(stderr, "%s could not retrieve file count on server\n", __func__);
         return;
     }
-
-    printf("number of files on server: %d\n", num_files);
     
     if (0 == num_files)
     {
@@ -132,6 +130,8 @@ void download_file (char * p_file_passed, int sockfd)
     char * p_buffer = NULL;
     char * p_fullpath = NULL;
 
+    printf("p_file_passed: %s\n", p_file_passed);
+
     p_fullpath = calloc(1, (strlen(file_path) + strlen(p_file_passed)) + 1);
     if (NULL == p_fullpath)
     {
@@ -146,7 +146,6 @@ void download_file (char * p_file_passed, int sockfd)
     fp = fopen(p_fullpath, "rb");
     if (NULL == fp)
     {
-        printf("error occurred, file not found\n");
         errno = ENOENT;
         perror("Could not open file passed");
         send(sockfd, &err_code, sizeof(int), 0);

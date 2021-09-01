@@ -267,43 +267,50 @@ def upload_file(menu_option):
         user_in = user_in.rstrip()
         cwd = os.getcwd()
         dir = "../" + user_in + "/"
-        file = input("Enter the file you wish to upload: hint - include extension\n")
-        file = file.rstrip()
+        if os.path.isdir(dir):
+            file = input("Enter the file you wish to upload: hint - include extension\n")
+            file = file.rstrip()
 
-        if is_client_file(dir, file) is True:
-            path = dir + file
-            file_size = os.path.getsize(path)
-            size = struct.pack("I", file_size)
-            sent = cli_socket.send(size)
+            if is_client_file(dir, file) is True:
+                path = dir + file
+                file_size = os.path.getsize(path)
+                size = struct.pack("I", file_size)
+                sent = cli_socket.send(size)
 
-            if sent == 0:
-                raise RuntimeError("Socket connection broken: upload file size")
-
-            name_len = len(file)
-            n_len = struct.pack("I", name_len)
-            sent = cli_socket.send(n_len)
-
-            if sent == 0:
-                raise RuntimeError("Socket connection broken: file name size")
-
-            totalsent = 0
-            while totalsent < len(file):
-                sent = cli_socket.send(file[totalsent:].encode('utf-8'))
                 if sent == 0:
-                    raise RuntimeError("Socket connection broken: file name")
-                totalsent += sent
-            totalsent = 0
-            print("Sending {} to File Server".format(path))
+                    raise RuntimeError("Socket connection broken: upload file size")
 
-            with open(path, "br") as file_ptr:
-                while totalsent < file_size:
-                    contents = file_ptr.read(1024)
-                    sent = cli_socket.send(contents)
+                name_len = len(file)
+                n_len = struct.pack("I", name_len)
+                sent = cli_socket.send(n_len)
+
+                if sent == 0:
+                    raise RuntimeError("Socket connection broken: file name size")
+
+                totalsent = 0
+                while totalsent < len(file):
+                    sent = cli_socket.send(file[totalsent:].encode('utf-8'))
                     if sent == 0:
-                        raise RuntimeError("Socket connection broken: sending contents")
+                        raise RuntimeError("Socket connection broken: file name")
                     totalsent += sent
-            print("Upload Complete")
+                totalsent = 0
+                print("Sending {} to File Server".format(path))
+
+                with open(path, "br") as file_ptr:
+                    while totalsent < file_size:
+                        contents = file_ptr.read(1024)
+                        sent = cli_socket.send(contents)
+                        if sent == 0:
+                            raise RuntimeError("Socket connection broken: sending contents")
+                        totalsent += sent
+                print("Upload Complete")
+            else:
+                print(f"file not found: {file} is not a valid file or directory...")
+                err_code = -1
+                size = struct.pack("i", err_code)
+                sent = cli_socket.send(size)
         else:
+            print(f"{dir} is not a valid directory location...")
             err_code = -1
             size = struct.pack("i", err_code)
             sent = cli_socket.send(size)

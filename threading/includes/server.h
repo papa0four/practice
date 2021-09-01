@@ -30,6 +30,7 @@
 
 #define LIST_DIR        "ls"
 #define UPLOAD_FILE     "upload"
+#define CLIENT_EXIT     "exit"
 
 typedef struct upload_file
 {
@@ -46,6 +47,39 @@ typedef struct upload_file
  * @return - N/A
  */
 void handle_signal (int sig_no);
+
+/**
+ * INT RECV_CLIENT_COMMAND:
+ * @brief - interprets the numerical command protocol sent by the client amd
+ *          calls the determine operation function continuously until error occurs
+ *          or client disconnects
+ * @param sock_fd - the client's socket file descriptor
+ * @return - 0 on success, -1 on failure
+ */
+int recv_client_command (int sock_fd);
+
+/**
+ * CHAR * GET_CLIENT_MSG:
+ * @brief - after numerical protocol is received, the client sends a command in plaintext
+ *          this function interprets the plain text to determine which command is sent by
+ *          the client
+ * @param sock_fd - the client's socket file descriptor
+ * @return - returns the plaintext command on success or NULL on failure 
+ */
+char * get_client_msg (int sock_fd);
+
+/**
+ * INT DETERMINE_OPERATION:
+ * @brief - receives a numerical command from the client and determines which file operation
+ *          to perform
+ * @param sock_fd - the client's socket file descriptor
+ * @param command - the numerical value representing a client command
+ * @return - returns 0 on success or -1 on failure
+ *           (NOTE: some operations although invalid, can still return succes. This allows
+ *            the user to make an accidental call and still remain connected to the server. 
+ *            These errors include incorrect file or directory selection)
+ */
+int determine_operation (int sock_fd, int command);
 
 /**
  * VOID * SERVER_FUNC:

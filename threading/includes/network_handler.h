@@ -52,12 +52,21 @@ typedef struct setup_info
 setup_info_t * handle_setup(int argc, char ** argv);
 
 /**
- * 
+ * STRUCT ADDRINFO SETUP_SERVER:
+ * @brief - meant to setup the addrinfo struct storing the server's structure data
+ * @param p_serv - a pointer the server's addrinfo struct
+ * @return - returns a pointer to the server structure set up with ai_family, ai_socktype, 
+ *           and ai_flags set
  */
 struct addrinfo setup_server (struct addrinfo * p_serv);
 
 /**
- * 
+ * INT SETUP_SOCKET:
+ * @brief - a helper function that sets up the server's TCP socket information
+ * @param p_serv - a pointer to the addrinfo struct storing the server's data
+ * @param p_port - a string representation of the port used for the socket connection
+ *                 upon initial execution of the server program (passed as cmdline argument)
+ * @return - returns the working TCP socket file descriptor on success or -1 on failure
  */
 int setup_socket (struct addrinfo * p_serv, char * p_port);
 

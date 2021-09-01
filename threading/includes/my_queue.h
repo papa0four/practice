@@ -15,14 +15,17 @@
 #define MAXQUEUE 50
 
 /**
- * 
+ * @brief - stores the file descriptor within the queue node
+ * @member data - the actual file descriptor value
  */
 typedef struct item {
     int data;
 } item;
 
 /**
- * 
+ * @brief - the structure of the actual queue node
+ * @member item - the node item storing the data
+ * @member next - a pointer to the next node in the queue
  */
 typedef struct node {
     item          item;
@@ -30,7 +33,10 @@ typedef struct node {
 } node;
 
 /**
- * 
+ * @brief - the queue data structure itself
+ * @member head - the pointer the front of the queue
+ * @member tail - the pointer to the last item in the queue
+ * @member queue_len - the current length of the queue
  */
 typedef struct queue {
     node * head;

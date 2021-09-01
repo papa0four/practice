@@ -19,7 +19,15 @@
 #define MAX_CLIENTS     50
 
 /**
- * 
+ * @brief - the structure storing the threadpool data for client connections
+ * @member threads - an array of pthread_t types for each connection made
+ * @member condition - the condition variable used for locks to set as wait or 
+ *                     broadcast
+ * @member lock - the pthread_mutex_lock variable to lock critical sections during
+ *                execution
+ * @member max_thread_cnt - the total number of allowable client connections
+ *                          (set at server program execution from the cmdline)
+ * @member thread_cnt - the current number of active threads
  */
 typedef struct thread_pool
 {
@@ -31,7 +39,12 @@ typedef struct thread_pool
 } threadpool_t;
 
 /**
- * 
+ * @brief - a list of global variables used throughout the lifespan of the program
+ * @var serv_running - a global boolean flag to determine life of server
+ * @var exiting - a thread specific boolean flag to determine if client is connected
+ * @var clients_con - a count of all active connections
+ * @var p_tpool - a pointer to the threadpool structure
+ * @var p_queue - a pointer to the queue structure
  */
 extern bool            serv_running;
 extern bool            exiting;
@@ -40,7 +53,9 @@ extern threadpool_t  * p_tpool;
 extern queue         * p_queue;
 
 /**
- * 
+ * @brief - initializes all global variables to include the threadpool and queue
+ * @param - N/A
+ * @return - 0 on success, -1 on failure
  */
 int init_globals ();
 
